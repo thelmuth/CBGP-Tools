@@ -129,7 +129,7 @@ def scrape_and_print(outputDirectory, verbose, csv):
 
         print("Number of finished runs:            %4i" % len(finished_runs))
         print("Solutions found:                    %4i" % len(solution_runs))
-        print("Zero error on test set:             %4i (unsure if simplified or not)" % len(generalized_runs))
+        print("Zero error on test set:             %4i" % len(generalized_runs))
 
         print("------------------------------------------------------------")
 
