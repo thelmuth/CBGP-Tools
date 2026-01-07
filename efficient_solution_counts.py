@@ -103,10 +103,10 @@ def scrape_and_print(outputDirectory, verbose, csv):
                 solution = True
                 generalized = True
 
-            # if "SOLUTION FOUND" in line:
-            #     finished_runs.append(i)
-            #     solution_runs.append(i)
-            #     solution = True
+            if "SOLUTION FAILED TO GENERALIZE" in line:
+                finished_runs.append(i)
+                solution_runs.append(i)
+                solution = True
 
             if "SOLUTION NOT FOUND" in line:
                 finished_runs.append(i)
@@ -115,9 +115,10 @@ def scrape_and_print(outputDirectory, verbose, csv):
 
             if "STARTING" in line:
                 generation = line.split("STARTING", 1)[1].strip()
+                finished_str = "finished" if solution != None else " " * 8
                 train_str = "train success" if solution else " " * 13
-                test_str = " | generalized" if generalized else ""
-                per_run_info += f"Run {i:3} | Gen: {generation:>4} | {train_str}{test_str}\n"
+                test_str = "generalized" if generalized else ""
+                per_run_info += f"Run {i:3} | Gen: {generation:>4} | {finished_str} | {train_str} | {test_str}\n"
                 break
 
         i += 1
