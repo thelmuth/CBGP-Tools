@@ -74,6 +74,8 @@ def scrape_and_print(outputDirectory, verbose, csv):
     solution_runs = []
     generalized_runs = []
 
+    per_run_info = ""
+
     # Main loop over files
     while (outputFilePrefix + str(i) + outputFileSuffix) in dirList:
         if not csv:
@@ -86,32 +88,43 @@ def scrape_and_print(outputDirectory, verbose, csv):
         fileName = (outputFilePrefix + str(i) + outputFileSuffix)
 
         if os.path.getsize(outputDirectory + fileName) == 0:
+            per_run_info += f"Run {i:3} | Gen:  not started\n"
             i += 1
             continue
 
+        solution = None
+        generalized = False
         for line in reverse_readline(outputDirectory + fileName):
 
             if "SOLUTION GENERALIZED" in line:
                 finished_runs.append(i)
                 solution_runs.append(i)
                 generalized_runs.append(i)
-                break
+                solution = True
+                generalized = True
 
-            if "SOLUTION FOUND" in line:
-                finished_runs.append(i)
-                solution_runs.append(i)
-                break
+            # if "SOLUTION FOUND" in line:
+            #     finished_runs.append(i)
+            #     solution_runs.append(i)
+            #     solution = True
 
             if "SOLUTION NOT FOUND" in line:
                 finished_runs.append(i)
                 failed_runs.append(i)
+                solution = False
+
+            if "STARTING" in line:
+                generation = line.split("STARTING", 1)[1].strip()
+                train_str = "train success" if solution else " " * 13
+                test_str = " | generalized" if generalized else ""
+                per_run_info += f"Run {i:3} | Gen: {generation:>4} | {train_str}{test_str}\n"
                 break
 
         i += 1
 
     if not csv:
         print()
-
+        print(per_run_info)
 
     not_done = []
     for j in range(i):
