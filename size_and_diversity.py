@@ -4,27 +4,28 @@ import os
 import re
 import sys
 
+def print_progress_bar(iteration, total, length=40):
+    """
+    Helper function to print a text-based progress bar to the console.
+    """
+    percent = ("{0:.1f}").format(100 * (iteration / float(total)))
+    filled_length = int(length * iteration // total)
+    bar = '█' * filled_length + '-' * (length - filled_length)
+    sys.stdout.write(f'\rProgress: |{bar}| {percent}% Complete ({iteration}/{total})')
+    sys.stdout.flush()
+
 def parse_logs(folder_path, output_filename="output.csv"):
     """
     Scrapes genetic programming logs for run number, generation, 
     code size stats, and unique behaviors.
     """
     
-    # 1. Compile Regex Patterns for performance
-    # Matches filenames like run1.txt, run100.txt
+    # 1. Compile Regex Patterns
     filename_pattern = re.compile(r'run(\d+)\.txt$')
-    
-    # Matches "STARTING 0"
     generation_start_pattern = re.compile(r'STARTING\s+(\d+)')
-    
-    # Matches ":code-size" lines. 
-    # We look for the map keys specific to this line.
-    # regex explanation: Look for key, whitespace, capture anything that isn't a comma, closing brace, or whitespace.
     code_size_line_check = re.compile(r':code-size\s+\{')
     mean_pattern = re.compile(r':mean\s+([^,\}\s]+)')
     median_pattern = re.compile(r':50%\s+([^,\}\s]+)')
-    
-    # Matches ":unique-behaviors 103"
     unique_behaviors_pattern = re.compile(r':unique-behaviors\s+(\d+)')
 
     rows = []
@@ -36,72 +37,91 @@ def parse_logs(folder_path, output_filename="output.csv"):
 
     print(f"Scanning directory: {folder_path}...")
 
-    # 3. Iterate over files
-    files_processed_count = 0
-    for entry in os.scandir(folder_path):
-        if not entry.is_file():
-            continue
+    # 3. Identify valid files first (to get a total count for the progress bar)
+    all_entries = []
+    try:
+        # We assume standard os.scandir is fine, but we list it to get the count
+        # Only keep files that match the pattern 'runN.txt'
+        with os.scandir(folder_path) as it:
+            for entry in it:
+                if entry.is_file() and filename_pattern.search(entry.name):
+                    all_entries.append(entry.path)
+    except OSError as e:
+        print(f"Error accessing directory: {e}")
+        sys.exit(1)
 
-        # Check if file matches naming scheme runN.txt
-        fname_match = filename_pattern.search(entry.name)
-        if fname_match:
-            files_processed_count += 1
-            run_number = fname_match.group(1)
-            file_path = entry.path
+    total_files = len(all_entries)
+    if total_files == 0:
+        print("No matching 'runN.txt' files found.")
+        sys.exit(0)
+
+    print(f"Found {total_files} logs. Starting processing...")
+    print_progress_bar(0, total_files)
+
+    # 4. Process files
+    for i, file_path in enumerate(all_entries):
+        
+        # Extract run number from the path (we know it matches because we filtered earlier)
+        # We re-match just to extract the group safely
+        filename = os.path.basename(file_path)
+        fname_match = filename_pattern.search(filename)
+        run_number = fname_match.group(1)
             
-            # Temporary holder for the data of the generation currently being parsed
-            current_row = {}
+        current_row = {}
 
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    for line in f:
-                        # --- Check for New Generation ---
-                        gen_match = generation_start_pattern.search(line)
-                        if gen_match:
-                            # If we were already building a row, save it before starting a new one
-                            if current_row and 'generation' in current_row:
-                                rows.append(current_row)
-                            
-                            # Initialize new row for this generation
-                            current_row = {
-                                'runNumber': run_number,
-                                'generation': gen_match.group(1),
-                                'codeSizeMean': '',
-                                'codeSizeMedian': '',
-                                'uniqueBehaviors': ''
-                            }
-                            continue
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    # --- Check for New Generation ---
+                    gen_match = generation_start_pattern.search(line)
+                    if gen_match:
+                        if current_row and 'generation' in current_row:
+                            rows.append(current_row)
                         
-                        # If we haven't hit a STARTING line yet, skip data lines
-                        if not current_row:
-                            continue
+                        current_row = {
+                            'runNumber': run_number,
+                            'generation': gen_match.group(1),
+                            'codeSizeMean': '',
+                            'codeSizeMedian': '',
+                            'uniqueBehaviors': ''
+                        }
+                        continue
+                    
+                    if not current_row:
+                        continue
 
-                        # --- Check for Code Size Statistics ---
-                        if code_size_line_check.search(line):
-                            # Extract Mean
-                            mean_match = mean_pattern.search(line)
-                            if mean_match:
-                                current_row['codeSizeMean'] = mean_match.group(1)
-                            
-                            # Extract Median (:50%)
-                            median_match = median_pattern.search(line)
-                            if median_match:
-                                current_row['codeSizeMedian'] = median_match.group(1)
+                    # --- Check for Code Size Statistics ---
+                    if code_size_line_check.search(line):
+                        mean_match = mean_pattern.search(line)
+                        if mean_match:
+                            current_row['codeSizeMean'] = mean_match.group(1)
+                        
+                        median_match = median_pattern.search(line)
+                        if median_match:
+                            current_row['codeSizeMedian'] = median_match.group(1)
 
-                        # --- Check for Unique Behaviors ---
-                        beh_match = unique_behaviors_pattern.search(line)
-                        if beh_match:
-                            current_row['uniqueBehaviors'] = beh_match.group(1)
+                    # --- Check for Unique Behaviors ---
+                    beh_match = unique_behaviors_pattern.search(line)
+                    if beh_match:
+                        current_row['uniqueBehaviors'] = beh_match.group(1)
 
-                    # End of file: Append the very last generation row if it exists
-                    if current_row and 'generation' in current_row:
-                        rows.append(current_row)
+                # End of file: Append the very last generation row
+                if current_row and 'generation' in current_row:
+                    rows.append(current_row)
 
-            except Exception as e:
-                print(f"Error reading file {entry.name}: {e}")
+        except Exception as e:
+            # Clear line to print error, then redraw bar
+            sys.stdout.write('\r' + ' ' * 80 + '\r') 
+            print(f"Error reading file {filename}: {e}")
+        
+        # Update Progress Bar
+        print_progress_bar(i + 1, total_files)
 
-    # 4. Sort and Write to CSV
-    # Sorting by Run Number (int) then Generation (int) for cleaner output
+    # New line after progress bar finishes
+    print() 
+
+    # 5. Sort and Write to CSV
+    print("Sorting and saving data...")
     rows.sort(key=lambda x: (int(x['runNumber']), int(x['generation'])))
 
     headers = ['runNumber', 'generation', 'codeSizeMean', 'codeSizeMedian', 'uniqueBehaviors']
@@ -111,11 +131,9 @@ def parse_logs(folder_path, output_filename="output.csv"):
         writer.writeheader()
         writer.writerows(rows)
 
-    print(f"Done. Processed {files_processed_count} files.")
-    print(f"Data written to: {os.path.abspath(output_filename)}")
+    print(f"Done. Data written to: {os.path.abspath(output_filename)}")
 
 if __name__ == "__main__":
-    # Setup command line arguments
     parser = argparse.ArgumentParser(description="Scrape GP log files to CSV.")
     parser.add_argument("folder", type=str, help="Path to the folder containing runN.txt files")
     
