@@ -14,7 +14,7 @@ def print_progress_bar(iteration, total, length=40):
     sys.stdout.write(f'\rProgress: |{bar}| {percent}% Complete ({iteration}/{total})')
     sys.stdout.flush()
 
-def parse_logs(folder_path, output_filename="output.csv"):
+def parse_logs(folder_path, output_filename):
     """
     Scrapes genetic programming logs for run number, generation, 
     code size stats, and unique behaviors.
@@ -35,13 +35,11 @@ def parse_logs(folder_path, output_filename="output.csv"):
         print(f"Error: The directory '{folder_path}' does not exist.")
         sys.exit(1)
 
-    print(f"Scanning directory: {folder_path}...")
+    print(f"Scanning directory: {os.path.abspath(folder_path)}...")
 
-    # 3. Identify valid files first (to get a total count for the progress bar)
+    # 3. Identify valid files first
     all_entries = []
     try:
-        # We assume standard os.scandir is fine, but we list it to get the count
-        # Only keep files that match the pattern 'runN.txt'
         with os.scandir(folder_path) as it:
             for entry in it:
                 if entry.is_file() and filename_pattern.search(entry.name):
@@ -61,8 +59,7 @@ def parse_logs(folder_path, output_filename="output.csv"):
     # 4. Process files
     for i, file_path in enumerate(all_entries):
         
-        # Extract run number from the path (we know it matches because we filtered earlier)
-        # We re-match just to extract the group safely
+        # Extract run number
         filename = os.path.basename(file_path)
         fname_match = filename_pattern.search(filename)
         run_number = fname_match.group(1)
@@ -110,15 +107,13 @@ def parse_logs(folder_path, output_filename="output.csv"):
                     rows.append(current_row)
 
         except Exception as e:
-            # Clear line to print error, then redraw bar
             sys.stdout.write('\r' + ' ' * 80 + '\r') 
             print(f"Error reading file {filename}: {e}")
         
         # Update Progress Bar
         print_progress_bar(i + 1, total_files)
 
-    # New line after progress bar finishes
-    print() 
+    print() # New line after bar finishes
 
     # 5. Sort and Write to CSV
     print("Sorting and saving data...")
@@ -135,7 +130,20 @@ def parse_logs(folder_path, output_filename="output.csv"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scrape GP log files to CSV.")
-    parser.add_argument("folder", type=str, help="Path to the folder containing runN.txt files")
+    # nargs='?' makes the argument optional
+    # default='.' means it defaults to current directory if nothing is provided
+    parser.add_argument("folder", type=str, nargs='?', default='.', 
+                        help="Path to the folder containing runN.txt files (defaults to current dir)")
     
     args = parser.parse_args()
-    parse_logs(args.folder)
+
+    # 1. Get the Absolute Path (resolves '.' to '/home/user/my_experiment')
+    abs_folder_path = os.path.abspath(args.folder)
+    
+    # 2. Get the base name of that absolute path (e.g. 'my_experiment')
+    folder_name = os.path.basename(abs_folder_path)
+    
+    # 3. Construct filename
+    output_name = f"{folder_name}-size-and-diversity.csv"
+    
+    parse_logs(args.folder, output_name)
