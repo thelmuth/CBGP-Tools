@@ -17,16 +17,21 @@ def print_progress_bar(iteration, total, length=40):
 def parse_logs(folder_path, output_filename):
     """
     Scrapes genetic programming logs for run number, generation, 
-    code size stats, and unique behaviors.
+    code size stats, genome size stats, and unique behaviors.
     """
     
     # 1. Compile Regex Patterns
     filename_pattern = re.compile(r'run(\d+)\.txt$')
     generation_start_pattern = re.compile(r'STARTING\s+(\d+)')
+    
+    # Line identifiers
     code_size_line_check = re.compile(r':code-size\s+\{')
+    genome_size_line_check = re.compile(r':genome-size\s+\{')
+    unique_behaviors_pattern = re.compile(r':unique-behaviors\s+(\d+)')
+
+    # Reusable patterns for extracting values within a map line
     mean_pattern = re.compile(r':mean\s+([^,\}\s]+)')
     median_pattern = re.compile(r':50%\s+([^,\}\s]+)')
-    unique_behaviors_pattern = re.compile(r':unique-behaviors\s+(\d+)')
 
     rows = []
 
@@ -72,14 +77,18 @@ def parse_logs(folder_path, output_filename):
                     # --- Check for New Generation ---
                     gen_match = generation_start_pattern.search(line)
                     if gen_match:
+                        # Save previous row if it exists
                         if current_row and 'generation' in current_row:
                             rows.append(current_row)
                         
+                        # Initialize new row
                         current_row = {
                             'runNumber': run_number,
                             'generation': gen_match.group(1),
                             'codeSizeMean': '',
                             'codeSizeMedian': '',
+                            'genomeSizeMean': '',
+                            'genomeSizeMedian': '',
                             'uniqueBehaviors': ''
                         }
                         continue
@@ -97,10 +106,21 @@ def parse_logs(folder_path, output_filename):
                         if median_match:
                             current_row['codeSizeMedian'] = median_match.group(1)
 
+                    # --- Check for Genome Size Statistics (NEW) ---
+                    elif genome_size_line_check.search(line):
+                        mean_match = mean_pattern.search(line)
+                        if mean_match:
+                            current_row['genomeSizeMean'] = mean_match.group(1)
+                        
+                        median_match = median_pattern.search(line)
+                        if median_match:
+                            current_row['genomeSizeMedian'] = median_match.group(1)
+
                     # --- Check for Unique Behaviors ---
-                    beh_match = unique_behaviors_pattern.search(line)
-                    if beh_match:
-                        current_row['uniqueBehaviors'] = beh_match.group(1)
+                    elif unique_behaviors_pattern.search(line):
+                        beh_match = unique_behaviors_pattern.search(line)
+                        if beh_match:
+                            current_row['uniqueBehaviors'] = beh_match.group(1)
 
                 # End of file: Append the very last generation row
                 if current_row and 'generation' in current_row:
@@ -119,7 +139,12 @@ def parse_logs(folder_path, output_filename):
     print("Sorting and saving data...")
     rows.sort(key=lambda x: (int(x['runNumber']), int(x['generation'])))
 
-    headers = ['runNumber', 'generation', 'codeSizeMean', 'codeSizeMedian', 'uniqueBehaviors']
+    headers = [
+        'runNumber', 'generation', 
+        'codeSizeMean', 'codeSizeMedian', 
+        'genomeSizeMean', 'genomeSizeMedian', 
+        'uniqueBehaviors'
+    ]
     
     with open(output_filename, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=headers)
@@ -130,17 +155,15 @@ def parse_logs(folder_path, output_filename):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Scrape GP log files to CSV.")
-    # nargs='?' makes the argument optional
-    # default='.' means it defaults to current directory if nothing is provided
     parser.add_argument("folder", type=str, nargs='?', default='.', 
                         help="Path to the folder containing runN.txt files (defaults to current dir)")
     
     args = parser.parse_args()
 
-    # 1. Get the Absolute Path (resolves '.' to '/home/user/my_experiment')
+    # 1. Get the Absolute Path
     abs_folder_path = os.path.abspath(args.folder)
     
-    # 2. Get the base name of that absolute path (e.g. 'my_experiment')
+    # 2. Get the base name
     folder_name = os.path.basename(abs_folder_path)
     
     # 3. Construct filename
