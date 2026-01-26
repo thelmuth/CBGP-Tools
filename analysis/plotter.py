@@ -37,7 +37,11 @@ def load_stats(filepath, mode='mean'):
         print(f"Error: File not found - {filepath}")
         sys.exit(1)
 
-    metric_cols = ['codeSizeMean', 'codeSizeMedian', 'uniqueBehaviors']
+    metric_cols = [
+        'codeSizeMean', 'codeSizeMedian', 
+        'genomeSizeMean', 'genomeSizeMedian', 
+        'uniqueBehaviors'
+    ]
     
     for col in metric_cols:
         if col in df.columns:
@@ -96,18 +100,22 @@ def plot_and_save(file1, file2, label1, label2, prefix, mode):
     df2 = load_stats(file2, mode)
 
     metrics = [
-        ('codeSizeMean', 'Mean Size', 'mean_code_size'),
-        ('codeSizeMedian', 'Median Size', 'median_code_size'),
+        ('codeSizeMean', 'Mean Code Size', 'mean_code_size'),
+        ('codeSizeMedian', 'Median Code Size', 'median_code_size'),
+        ('genomeSizeMean', 'Mean Genome Size', 'mean_genome_size'),
+        ('genomeSizeMedian', 'Median Genome Size', 'median_genome_size'),
         ('uniqueBehaviors', 'Diversity (Unique Behaviors / 1000)', 'diversity') 
     ]
 
     # 2. Define Styles
-    # I added 'fill_alpha' here so you can keep your specific transparency settings
     style1 = {'color': 'black', 'linestyle': '-', 'label': label1, 'fill_alpha': 0.2, 'linewidth': 1}
     style2 = style1.copy()
     style2['color'] = "#00AAFF"
     style2['label'] = label2
-    style2['linewidth'] = 1
+
+    # Ensure output directory exists
+    if not os.path.exists('images'):
+        os.makedirs('images')
 
     for col_name, title, suffix in metrics:
         plt.figure(figsize=(10, 6))
