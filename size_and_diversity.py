@@ -163,10 +163,12 @@ if __name__ == "__main__":
     # 1. Get the Absolute Path
     abs_folder_path = os.path.abspath(args.folder)
     
-    # 2. Get the base name
+    # 2. Get the base name (current dir) and parent dir name
     folder_name = os.path.basename(abs_folder_path)
+    parent_path = os.path.dirname(abs_folder_path)
+    parent_name = os.path.basename(parent_path)
     
     # 3. Construct filename
-    output_name = f"{folder_name}-size-and-diversity.csv"
+    output_name = f"{parent_name}-{folder_name}-size-and-diversity.csv"
     
     parse_logs(args.folder, output_name)
